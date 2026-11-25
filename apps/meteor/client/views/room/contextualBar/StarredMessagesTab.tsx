@@ -1,6 +1,7 @@
 import type { IMessage } from '@rocket.chat/core-typings';
-import { useEndpoint } from '@rocket.chat/ui-contexts';
-import { useQuery } from '@tanstack/react-query';
+import { useEndpoint, useStream } from '@rocket.chat/ui-contexts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MessageListTab from './MessageListTab';
@@ -30,6 +31,23 @@ const StarredMessagesTab = () => {
 			return Promise.all(messages.map(onClientMessageReceived));
 		},
 	});
+
+	const queryClient = useQueryClient();
+	const subscribeToRoomMessages = useStream('room-messages');
+
+	useEffect(
+		() =>
+			subscribeToRoomMessages(room._id, async (event) => {
+				const queryKey = roomsQueryKeys.starredMessages(room._id);
+				if (!queryClient.getQueryData<IMessage[]>(queryKey)?.some(({ _id }) => _id === event._id)) {
+					return;
+				}
+
+				const message = await onClientMessageReceived(event);
+				queryClient.setQueryData<IMessage[]>(queryKey, (messages) => messages?.map((m) => (m._id === message._id ? message : m)));
+			}),
+		[queryClient, room._id, subscribeToRoomMessages],
+	);
 
 	const { t } = useTranslation();
 
