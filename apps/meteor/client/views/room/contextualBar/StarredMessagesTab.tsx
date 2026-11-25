@@ -39,12 +39,22 @@ const StarredMessagesTab = () => {
 		() =>
 			subscribeToRoomMessages(room._id, async (event) => {
 				const queryKey = roomsQueryKeys.starredMessages(room._id);
+				if (queryClient.isFetching({ queryKey })) {
+					await queryClient.cancelQueries({ queryKey });
+					await queryClient.invalidateQueries({ queryKey });
+					return;
+				}
+
 				if (!queryClient.getQueryData<IMessage[]>(queryKey)?.some(({ _id }) => _id === event._id)) {
 					return;
 				}
 
 				const message = await onClientMessageReceived(event);
-				queryClient.setQueryData<IMessage[]>(queryKey, (messages) => messages?.map((m) => (m._id === message._id ? message : m)));
+				queryClient.setQueryData<IMessage[]>(queryKey, (messages) =>
+					messages?.map((m) =>
+						m._id === message._id && message._updatedAt.getTime() >= m._updatedAt.getTime() ? { ...message, starred: m.starred } : m,
+					),
+				);
 			}),
 		[queryClient, room._id, subscribeToRoomMessages],
 	);
